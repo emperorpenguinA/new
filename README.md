@@ -25,20 +25,22 @@ Google Photos API(Picker API / Library API)は、プライバシー保護のた�
 3. 「次のステップ」→エクスポート方法を選んで作成
 4. 準備ができたらメールで通知が届くので、zipファイルをダウンロードして展開する
 
-### 2. アプリを起動する
+### 2. アプリを開く
 
-```sh
-npm install
-npm start
-```
-
-ブラウザで http://localhost:3000 を開き、展開したフォルダのパス
-(例: `/home/you/Downloads/Takeout/Google フォト`)を入力して「スキャンする」を押してください。
+**Node.js不要です。`public/index.html` をダブルクリックしてブラウザで直接開くだけで使えます。**
+「📁 フォルダを選択」ボタンから、展開したTakeoutのフォルダ(例: `Takeout/Google フォト`)を
+選んでください。フォルダの中身は全てブラウザの中だけで処理され、どこにも送信されません。
 
 写真の枚数が多いと、全てのExifを読み込むのに時間がかかります。
 
+(お使いのブラウザがfile://ページからの外部スクリプト読み込みを制限している場合は、
+代わりに `npm install && npm start` でローカルサーバーを起動し、
+http://localhost:3000 を開いてください。)
+
 ## 技術構成
 
-- Node.js + Express (ビルドステップ無し、素のJavaScript)
-- EXIF GPS抽出: [exifr](https://github.com/MikeKovarik/exifr)
-- フロントエンド: 素のHTML/CSS/JavaScript + [Leaflet](https://leafletjs.com/) + OpenStreetMap
+- 素のHTML/CSS/JavaScript のみで完結(ビルドステップ・バックエンド処理なし)
+- ブラウザの[File and Directory Entries API](https://developer.mozilla.org/ja/docs/Web/API/File_and_Directory_Entries_API)(`webkitdirectory`)でフォルダを選択
+- EXIF GPS抽出: [exifr](https://github.com/MikeKovarik/exifr) (ブラウザ版)
+- 地図表示: [Leaflet](https://leafletjs.com/) + OpenStreetMap
+- `server.js`/`express`は、file://での起動がブラウザの制限に引っかかる場合のための任意のローカルサーバーとして同梱
