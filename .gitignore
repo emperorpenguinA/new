@@ -1,2 +1,2 @@
-build/
-WebContent/WEB-INF/google-photos.properties
+node_modules/
+.env

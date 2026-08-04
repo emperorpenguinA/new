@@ -1,0 +1,23 @@
+body {
+	font-family: sans-serif;
+	max-width: 800px;
+	margin: 2rem auto;
+	padding: 0 1rem;
+}
+
+button {
+	font-size: 1rem;
+	padding: 0.5rem 1rem;
+	margin-right: 0.5rem;
+	cursor: pointer;
+}
+
+.notice {
+	color: #c0392b;
+}
+
+#map {
+	height: 600px;
+	width: 100%;
+	margin-top: 1rem;
+}
