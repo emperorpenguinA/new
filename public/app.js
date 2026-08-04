@@ -48,19 +48,44 @@
 		}
 	});
 
-	document.getElementById('checkDoneButton').addEventListener('click', async function () {
-		if (!currentSessionId) return;
-		const statusRes = await fetch('/api/picker/' + encodeURIComponent(currentSessionId));
-		const status = await statusRes.json();
-		if (!status.mediaItemsSet) {
-			waitingMessage.hidden = false;
+	const checkDoneButton = document.getElementById('checkDoneButton');
+	checkDoneButton.addEventListener('click', async function () {
+		if (!currentSessionId) {
+			alert('写真選択セッションが見つかりません。お手数ですが最初からやり直してください。');
+			showOnly(stepPick);
 			return;
 		}
+
+		const originalLabel = checkDoneButton.textContent;
+		checkDoneButton.disabled = true;
+		checkDoneButton.textContent = '確認中...';
 		waitingMessage.hidden = true;
 
-		const spotsRes = await fetch('/api/picker/' + encodeURIComponent(currentSessionId) + '/spots');
-		const data = await spotsRes.json();
-		renderMap(data.spots, data.totalPicked);
+		try {
+			const statusRes = await fetch('/api/picker/' + encodeURIComponent(currentSessionId));
+			const status = await statusRes.json();
+			if (!statusRes.ok) {
+				throw new Error(status.error || ('選択状況の確認に失敗しました(status=' + statusRes.status + ')'));
+			}
+			if (!status.mediaItemsSet) {
+				waitingMessage.hidden = false;
+				return;
+			}
+
+			checkDoneButton.textContent = '写真を取得中...(枚数によって時間がかかります)';
+			const spotsRes = await fetch('/api/picker/' + encodeURIComponent(currentSessionId) + '/spots');
+			const data = await spotsRes.json();
+			if (!spotsRes.ok) {
+				throw new Error(data.error || ('写真の取得に失敗しました(status=' + spotsRes.status + ')'));
+			}
+			renderMap(data.spots, data.totalPicked);
+		} catch (e) {
+			console.error(e);
+			alert('エラーが発生しました: ' + e.message);
+		} finally {
+			checkDoneButton.disabled = false;
+			checkDoneButton.textContent = originalLabel;
+		}
 	});
 
 	document.getElementById('restartButton').addEventListener('click', function () {

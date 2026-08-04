@@ -107,32 +107,34 @@ app.get('/api/picker/:sessionId/spots', requireAuth, async (req, res) => {
     const mediaItems = await googlePhotos.listPickedMediaItems(accessToken, req.params.sessionId);
 
     req.session.thumbnailUrls = req.session.thumbnailUrls || {};
-    const spots = [];
-    let totalPicked = 0;
+    const itemsWithFile = mediaItems.filter((item) => item.mediaFile && item.mediaFile.baseUrl);
+    itemsWithFile.forEach((item) => {
+      req.session.thumbnailUrls[item.id] = item.mediaFile.baseUrl;
+    });
 
-    for (const item of mediaItems) {
-      const mediaFile = item.mediaFile;
-      if (!mediaFile || !mediaFile.baseUrl) continue;
-      totalPicked += 1;
-      req.session.thumbnailUrls[item.id] = mediaFile.baseUrl;
-
-      try {
-        const original = await googlePhotos.downloadPhoto(mediaFile.baseUrl, accessToken, '=d');
-        const gps = await exifr.gps(original);
-        if (gps && typeof gps.latitude === 'number' && typeof gps.longitude === 'number') {
-          spots.push({
-            id: item.id,
-            filename: mediaFile.filename,
-            lat: gps.latitude,
-            lng: gps.longitude,
-          });
+    // 1枚ずつ順番にダウンロードすると枚数が多い時に待ち時間が長くなるため並列で処理する
+    const results = await Promise.all(
+      itemsWithFile.map(async (item) => {
+        try {
+          const original = await googlePhotos.downloadPhoto(item.mediaFile.baseUrl, accessToken, '=d');
+          const gps = await exifr.gps(original);
+          if (gps && typeof gps.latitude === 'number' && typeof gps.longitude === 'number') {
+            return {
+              id: item.id,
+              filename: item.mediaFile.filename,
+              lat: gps.latitude,
+              lng: gps.longitude,
+            };
+          }
+        } catch (e) {
+          // GPSが取れない/ダウンロードに失敗した写真は地図上ではスキップする
         }
-      } catch (e) {
-        // GPSが取れない写真は地図上ではスキップする
-      }
-    }
+        return null;
+      })
+    );
 
-    res.json({ totalPicked, spots });
+    const spots = results.filter(Boolean);
+    res.json({ totalPicked: itemsWithFile.length, spots });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
