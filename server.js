@@ -115,19 +115,21 @@ app.get('/api/picker/:sessionId/spots', requireAuth, async (req, res) => {
     // 1枚ずつ順番にダウンロードすると枚数が多い時に待ち時間が長くなるため並列で処理する
     const results = await Promise.all(
       itemsWithFile.map(async (item) => {
+        const filename = item.mediaFile.filename;
         try {
           const original = await googlePhotos.downloadPhoto(item.mediaFile.baseUrl, accessToken, '=d');
           const gps = await exifr.gps(original);
           if (gps && typeof gps.latitude === 'number' && typeof gps.longitude === 'number') {
             return {
               id: item.id,
-              filename: item.mediaFile.filename,
+              filename,
               lat: gps.latitude,
               lng: gps.longitude,
             };
           }
+          console.log(`[ramen-map] GPS情報なし: ${filename}`);
         } catch (e) {
-          // GPSが取れない/ダウンロードに失敗した写真は地図上ではスキップする
+          console.log(`[ramen-map] 処理失敗: ${filename} (${e.message})`);
         }
         return null;
       })
