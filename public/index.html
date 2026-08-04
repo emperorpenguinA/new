@@ -10,29 +10,21 @@
 <body>
 
 <h1>🍜 ラーメンマップ</h1>
-<p>Googleフォトにあるラーメンの写真を選ぶと、位置情報(EXIF)から地図上にプロットします。</p>
+<p>
+	Google TakeoutでエクスポートしたGoogleフォトのフォルダを指定すると、
+	写真の位置情報(EXIFまたはTakeoutの付属JSON)から地図上にプロットします。
+</p>
 
-<section id="step-login">
-	<button id="loginButton">Googleフォトと連携する</button>
-</section>
-
-<section id="step-pick" hidden>
-	<button id="startPickButton">Googleフォトで写真を選ぶ</button>
-</section>
-
-<section id="step-waiting" hidden>
-	<ol>
-		<li>開いたタブでラーメンの写真を選択してください(複数選択可)。</li>
-		<li>選択が終わったら、Googleフォト側の画面で完了し、このタブに戻って下のボタンを押してください。</li>
-	</ol>
-	<button id="openPickerButton">Googleフォトを開く</button>
-	<button id="checkDoneButton">選択を確認する</button>
-	<p id="waitingMessage" class="notice" hidden>まだ選択が完了していないようです。もう一度お試しください。</p>
+<section id="step-scan">
+	<label for="folderPathInput">エクスポートしたフォルダのパス</label><br>
+	<input type="text" id="folderPathInput" size="60" placeholder="例: /home/you/Downloads/Takeout/Google フォト">
+	<button id="scanButton">スキャンする</button>
+	<p id="scanMessage" class="notice" hidden></p>
 </section>
 
 <section id="step-map" hidden>
 	<p id="mapSummary"></p>
-	<button id="restartButton">別の写真でつくり直す</button>
+	<button id="rescanButton">別のフォルダをスキャンする</button>
 	<div id="map"></div>
 </section>
 

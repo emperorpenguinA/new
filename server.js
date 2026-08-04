@@ -1,169 +1,55 @@
 'use strict';
 
-require('dotenv').config();
-
-const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const session = require('express-session');
-const exifr = require('exifr');
 
-const googlePhotos = require('./src/googlePhotos');
-
-const {
-  GOOGLE_CLIENT_ID,
-  GOOGLE_CLIENT_SECRET,
-  GOOGLE_REDIRECT_URI,
-  SESSION_SECRET,
-  PORT,
-} = process.env;
-
-if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REDIRECT_URI) {
-  console.error(
-    '.envにGOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URIを設定してください' +
-      '(.env.exampleを参考にしてください)'
-  );
-  process.exit(1);
-}
+const { scanForRamenSpots } = require('./src/scanPhotos');
 
 const app = express();
 app.use(express.json());
-app.use(
-  session({
-    secret: SESSION_SECRET || 'dev-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { httpOnly: true },
-  })
-);
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/api/session', (req, res) => {
-  res.json({ authenticated: Boolean(req.session.accessToken) });
-});
+// 直近でスキャンしたフォルダのみサムネイル配信を許可する(単純なパストラバーサル対策)
+let lastScanRoot = null;
 
-app.get('/auth/google', (req, res) => {
-  const state = crypto.randomBytes(16).toString('hex');
-  req.session.oauthState = state;
-  const url = googlePhotos.buildAuthorizationUrl({
-    clientId: GOOGLE_CLIENT_ID,
-    redirectUri: GOOGLE_REDIRECT_URI,
-    state,
-  });
-  res.redirect(url);
-});
+app.post('/api/scan', async (req, res) => {
+  const folderPath = req.body && req.body.folderPath;
+  if (!folderPath) {
+    return res.status(400).json({ error: 'folderPathを指定してください。' });
+  }
 
-app.get('/oauth2callback', async (req, res) => {
-  const { code, state, error } = req.query;
-  if (error) {
-    return res.status(400).send(`Google認可がキャンセルされました: ${error}`);
-  }
-  if (!state || state !== req.session.oauthState) {
-    return res.status(400).send('不正なリクエストです(state不一致)。');
-  }
-  delete req.session.oauthState;
-  if (!code) {
-    return res.status(400).send('認可コードがありません。');
+  const resolved = path.resolve(folderPath);
+  if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory()) {
+    return res.status(400).json({ error: `フォルダが見つかりません: ${resolved}` });
   }
 
   try {
-    const token = await googlePhotos.exchangeCodeForToken({
-      clientId: GOOGLE_CLIENT_ID,
-      clientSecret: GOOGLE_CLIENT_SECRET,
-      redirectUri: GOOGLE_REDIRECT_URI,
-      code,
-    });
-    if (!token.access_token) {
-      throw new Error(`アクセストークンの取得に失敗しました: ${JSON.stringify(token)}`);
-    }
-    req.session.accessToken = token.access_token;
-    res.redirect('/');
-  } catch (e) {
-    res.status(500).send(e.message);
-  }
-});
-
-app.post('/api/picker', requireAuth, async (req, res) => {
-  try {
-    const session_ = await googlePhotos.createPickerSession(req.session.accessToken);
-    res.json({ sessionId: session_.id, pickerUri: session_.pickerUri });
+    const result = await scanForRamenSpots(resolved);
+    lastScanRoot = resolved;
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-app.get('/api/picker/:sessionId', requireAuth, async (req, res) => {
-  try {
-    const session_ = await googlePhotos.getPickerSession(req.session.accessToken, req.params.sessionId);
-    res.json({ mediaItemsSet: Boolean(session_.mediaItemsSet) });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/picker/:sessionId/spots', requireAuth, async (req, res) => {
-  try {
-    const accessToken = req.session.accessToken;
-    const mediaItems = await googlePhotos.listPickedMediaItems(accessToken, req.params.sessionId);
-
-    req.session.thumbnailUrls = req.session.thumbnailUrls || {};
-    const itemsWithFile = mediaItems.filter((item) => item.mediaFile && item.mediaFile.baseUrl);
-    itemsWithFile.forEach((item) => {
-      req.session.thumbnailUrls[item.id] = item.mediaFile.baseUrl;
-    });
-
-    // 1枚ずつ順番にダウンロードすると枚数が多い時に待ち時間が長くなるため並列で処理する
-    const results = await Promise.all(
-      itemsWithFile.map(async (item) => {
-        const filename = item.mediaFile.filename;
-        try {
-          const original = await googlePhotos.downloadPhoto(item.mediaFile.baseUrl, accessToken, '=d');
-          const gps = await exifr.gps(original);
-          if (gps && typeof gps.latitude === 'number' && typeof gps.longitude === 'number') {
-            return {
-              id: item.id,
-              filename,
-              lat: gps.latitude,
-              lng: gps.longitude,
-            };
-          }
-          console.log(`[ramen-map] GPS情報なし: ${filename}`);
-        } catch (e) {
-          console.log(`[ramen-map] 処理失敗: ${filename} (${e.message})`);
-        }
-        return null;
-      })
-    );
-
-    const spots = results.filter(Boolean);
-    res.json({ totalPicked: itemsWithFile.length, spots });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/photo/:mediaItemId', requireAuth, async (req, res) => {
-  const baseUrl = (req.session.thumbnailUrls || {})[req.params.mediaItemId];
-  if (!baseUrl) {
+app.get('/thumbnail', (req, res) => {
+  const relPath = req.query.path;
+  if (!lastScanRoot || !relPath) {
     return res.sendStatus(404);
   }
-  try {
-    const thumbnail = await googlePhotos.downloadPhoto(baseUrl, req.session.accessToken, '=w300-h300');
-    res.set('Content-Type', 'image/jpeg');
-    res.send(thumbnail);
-  } catch (e) {
-    res.status(500).send(e.message);
+  const resolved = path.resolve(lastScanRoot, relPath);
+  if (!resolved.startsWith(lastScanRoot + path.sep) && resolved !== lastScanRoot) {
+    return res.sendStatus(403);
   }
+  res.sendFile(resolved, (err) => {
+    if (err && !res.headersSent) {
+      res.sendStatus(404);
+    }
+  });
 });
 
-function requireAuth(req, res, next) {
-  if (!req.session.accessToken) {
-    return res.status(401).json({ error: '未認証です。/auth/google からログインしてください。' });
-  }
-  next();
-}
-
-const port = PORT || 3000;
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`ラーメンマップサーバー起動: http://localhost:${port}`);
 });
