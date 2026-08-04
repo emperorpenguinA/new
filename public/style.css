@@ -28,6 +28,10 @@ button,
 	color: #c0392b;
 }
 
+.shop-name-loading {
+	color: #888;
+}
+
 #map {
 	height: 600px;
 	width: 100%;

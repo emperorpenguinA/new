@@ -144,6 +144,46 @@
 		showOnly(stepScan);
 	});
 
+	// 座標 -> 店名/住所の解決結果をキャッシュ(同じ地点を何度開いても再取得しないため)
+	const shopNameCache = new Map();
+
+	function cacheKey(lat, lng) {
+		return lat.toFixed(5) + ',' + lng.toFixed(5);
+	}
+
+	/**
+	 * OpenStreetMapのNominatim(無料・APIキー不要)で逆ジオコーディングする。
+	 * 写真のGPS座標は店の入口ちょうどとは限らないため、店名が正確に取れるとは限らない。
+	 * display_nameの先頭要素を店名/施設名の推定値として扱い、フルの住所も合わせて表示する。
+	 */
+	async function lookupShopName(lat, lng) {
+		const key = cacheKey(lat, lng);
+		if (shopNameCache.has(key)) {
+			return shopNameCache.get(key);
+		}
+		const url =
+			'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' +
+			encodeURIComponent(lat) +
+			'&lon=' +
+			encodeURIComponent(lng) +
+			'&zoom=18&addressdetails=1';
+		try {
+			const res = await fetch(url, { headers: { Accept: 'application/json' } });
+			if (!res.ok) throw new Error('status=' + res.status);
+			const data = await res.json();
+			const displayName = data.display_name || '';
+			const guessedName = displayName.split(',')[0].trim();
+			const result = { name: guessedName || null, address: displayName };
+			shopNameCache.set(key, result);
+			return result;
+		} catch (e) {
+			console.log('[ramen-map] 店名の取得に失敗:', lat, lng, e.message);
+			const result = { name: null, address: null };
+			shopNameCache.set(key, result);
+			return result;
+		}
+	}
+
 	function renderMap(spots, totalPhotos) {
 		mapSummary.textContent =
 			'見つかった写真 ' + totalPhotos + ' 枚中、位置情報が見つかった ' + spots.length + ' 枚を表示しています。';
@@ -164,9 +204,16 @@
 
 		spots.forEach(function (spot) {
 			const marker = L.marker([spot.lat, spot.lng], { icon: ramenIcon });
-			marker.bindPopup(
-				'<img src="' + spot.objectUrl + '" width="150" style="object-fit:cover;"><br>' + escapeHtml(spot.filename || '')
-			);
+			marker.bindPopup(popupHtml(spot, '<span class="shop-name-loading">お店を調べています...</span>'));
+
+			marker.on('popupopen', async function () {
+				const result = await lookupShopName(spot.lat, spot.lng);
+				const nameHtml = result.name
+					? '<strong>' + escapeHtml(result.name) + '</strong>(推定)<br><small>' + escapeHtml(result.address || '') + '</small>'
+					: '<span class="notice">お店の情報を取得できませんでした</span>';
+				marker.setPopupContent(popupHtml(spot, nameHtml));
+			});
+
 			marker.addTo(markersLayer);
 			bounds.push([spot.lat, spot.lng]);
 		});
@@ -178,6 +225,15 @@
 		} else {
 			leafletMap.setView([35.681236, 139.767125], 5); // 東京駅
 		}
+	}
+
+	function popupHtml(spot, shopInfoHtml) {
+		return (
+			'<img src="' + spot.objectUrl + '" width="150" style="object-fit:cover;"><br>' +
+			escapeHtml(spot.filename || '') +
+			'<br>' +
+			shopInfoHtml
+		);
 	}
 
 	function escapeHtml(text) {
