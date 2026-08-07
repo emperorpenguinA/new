@@ -151,6 +151,35 @@
 		return lat.toFixed(5) + ',' + lng.toFixed(5);
 	}
 
+	// 都道府県から番地に向かって並ぶ、日本語の住所として自然な順序
+	const ADDRESS_FIELD_ORDER = [
+		'state', // 都道府県
+		'county', // 郡
+		'city', // 市
+		'city_district', // 区
+		'town', // 町
+		'village', // 村
+		'suburb', // 地区/丁目
+		'neighbourhood',
+		'quarter',
+		'road',
+		'house_number',
+	];
+
+	/**
+	 * Nominatimのdisplay_nameは詳細->広域の順(例:「〇〇店, 新奥多摩街道, ...,福生市, 東京都」)で
+	 * 日本語の住所表記としては逆順になっているため、addressdetailsの構造化データから
+	 * 都道府県->市区町村->...の自然な順序に組み立て直す。
+	 */
+	function formatJapaneseAddress(address) {
+		if (!address) return '';
+		return ADDRESS_FIELD_ORDER.map(function (key) {
+			return address[key];
+		})
+			.filter(Boolean)
+			.join('');
+	}
+
 	/**
 	 * OpenStreetMapのNominatim(無料・APIキー不要)で逆ジオコーディングする。
 	 * 写真のGPS座標は店の入口ちょうどとは限らないため、店名が正確に取れるとは限らない。
@@ -173,7 +202,8 @@
 			const data = await res.json();
 			const displayName = data.display_name || '';
 			const guessedName = displayName.split(',')[0].trim();
-			const result = { name: guessedName || null, address: displayName };
+			const formattedAddress = formatJapaneseAddress(data.address) || displayName;
+			const result = { name: guessedName || null, address: formattedAddress };
 			shopNameCache.set(key, result);
 			return result;
 		} catch (e) {
