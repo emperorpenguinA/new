@@ -166,7 +166,7 @@
 			encodeURIComponent(lat) +
 			'&lon=' +
 			encodeURIComponent(lng) +
-			'&zoom=18&addressdetails=1';
+			'&zoom=18&addressdetails=1&accept-language=ja';
 		try {
 			const res = await fetch(url, { headers: { Accept: 'application/json' } });
 			if (!res.ok) throw new Error('status=' + res.status);
@@ -199,7 +199,13 @@
 		}
 		markersLayer.clearLayers();
 
-		const ramenIcon = L.divIcon({ html: '🍜', className: 'ramen-emoji-icon', iconSize: [28, 28] });
+		const ramenIcon = L.divIcon({
+			html: '<span class="ramen-emoji-icon-inner">🍜</span>',
+			className: 'ramen-emoji-icon',
+			iconSize: [40, 40],
+			iconAnchor: [20, 20],
+			popupAnchor: [0, -20],
+		});
 		const bounds = [];
 
 		spots.forEach(function (spot) {

@@ -32,6 +32,25 @@ button,
 	color: #888;
 }
 
+.ramen-emoji-icon {
+	background: transparent;
+	border: none;
+}
+
+.ramen-emoji-icon-inner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	font-size: 22px;
+	line-height: 1;
+	background: #fff3e0;
+	border: 2px solid #e65100;
+	border-radius: 50%;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
 #map {
 	height: 600px;
 	width: 100%;
