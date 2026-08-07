@@ -151,33 +151,43 @@
 		return lat.toFixed(5) + ',' + lng.toFixed(5);
 	}
 
-	// 都道府県から番地に向かって並ぶ、日本語の住所として自然な順序
+	// 都道府県から番地に向かって並ぶ、日本語の住所として自然な順序。
+	// Nominatimはバージョンや地域によって都道府県などのキー名が揺れることがあるため
+	// (state/province等)、想定されるキー名を広めに列挙しておく。
 	const ADDRESS_FIELD_ORDER = [
 		'state', // 都道府県
+		'province',
+		'state_district',
 		'county', // 郡
 		'city', // 市
+		'municipality',
 		'city_district', // 区
+		'district',
+		'borough',
 		'town', // 町
 		'village', // 村
-		'suburb', // 地区/丁目
+		'suburb', // 地区
+		'subdivision',
+		'city_block', // 丁目
 		'neighbourhood',
 		'quarter',
 		'road',
-		'house_number',
+		'house_number', // 番地(Nominatim/OSMの日本の住所データには含まれないことが多い)
 	];
 
 	/**
 	 * Nominatimのdisplay_nameは詳細->広域の順(例:「〇〇店, 新奥多摩街道, ...,福生市, 東京都」)で
 	 * 日本語の住所表記としては逆順になっているため、addressdetailsの構造化データから
-	 * 都道府県->市区町村->...の自然な順序に組み立て直す。
+	 * 都道府県->市区町村->...の自然な順序に組み立て直す。郵便番号は先頭に付ける。
 	 */
 	function formatJapaneseAddress(address) {
 		if (!address) return '';
-		return ADDRESS_FIELD_ORDER.map(function (key) {
+		const body = ADDRESS_FIELD_ORDER.map(function (key) {
 			return address[key];
 		})
 			.filter(Boolean)
 			.join('');
+		return address.postcode ? '〒' + address.postcode + ' ' + body : body;
 	}
 
 	/**
