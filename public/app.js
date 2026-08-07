@@ -151,10 +151,9 @@
 		return lat.toFixed(5) + ',' + lng.toFixed(5);
 	}
 
-	// 都道府県から番地に向かって並ぶ、日本語の住所として自然な順序。
-	// Nominatimはバージョンや地域によって都道府県などのキー名が揺れることがあるため
-	// (state/province等)、想定されるキー名を広めに列挙しておく。
-	const ADDRESS_FIELD_ORDER = [
+	// 都道府県 -> 市区町村レベル。Nominatimはバージョン/地域によってキー名が揺れる
+	// (state/province等)ため、想定されるキー名を広めに列挙しておく。
+	const BROAD_ADDRESS_FIELD_ORDER = [
 		'state', // 都道府県
 		'province',
 		'state_district',
@@ -164,9 +163,13 @@
 		'city_district', // 区
 		'district',
 		'borough',
-		'town', // 町
+		'town', // 町(それ自体が市区町村の場合)
 		'village', // 村
-		'suburb', // 地区
+	];
+
+	// 町丁目以下のレベル。GSIから町丁目名が取れなかった場合のフォールバックに使う。
+	const FINE_ADDRESS_FIELD_ORDER = [
+		'suburb', // 地区/町丁目
 		'subdivision',
 		'city_block', // 丁目
 		'neighbourhood',
@@ -175,44 +178,71 @@
 		'house_number', // 番地(Nominatim/OSMの日本の住所データには含まれないことが多い)
 	];
 
-	/**
-	 * Nominatimのdisplay_nameは詳細->広域の順(例:「〇〇店, 新奥多摩街道, ...,福生市, 東京都」)で
-	 * 日本語の住所表記としては逆順になっているため、addressdetailsの構造化データから
-	 * 都道府県->市区町村->...の自然な順序に組み立て直す。郵便番号は先頭に付ける。
-	 */
-	function formatJapaneseAddress(address) {
+	function joinAddressFields(address, order) {
 		if (!address) return '';
-		const body = ADDRESS_FIELD_ORDER.map(function (key) {
-			return address[key];
-		})
+		return order
+			.map(function (key) {
+				return address[key];
+			})
 			.filter(Boolean)
 			.join('');
-		return address.postcode ? '〒' + address.postcode + ' ' + body : body;
+	}
+
+	/**
+	 * 国土地理院(GSI)の逆ジオコーディングAPI(無料・APIキー不要・日本政府提供)で
+	 * 町丁目レベルの住所を取得する。Nominatimより日本の住所表記としての精度が高い。
+	 * 番地・号までは基本的に取得できない(無料で番地まで逆引きできるサービスは
+	 * 日本国内でもほぼ存在しないため)。
+	 */
+	async function lookupGsiTownName(lat, lng) {
+		const url =
+			'https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=' +
+			encodeURIComponent(lat) +
+			'&lon=' +
+			encodeURIComponent(lng);
+		try {
+			const res = await fetch(url);
+			if (!res.ok) throw new Error('status=' + res.status);
+			const data = await res.json();
+			return (data.results && data.results.lv01Nm) || null;
+		} catch (e) {
+			console.log('[ramen-map] GSIの住所取得に失敗(Nominatimの結果のみ使用します):', lat, lng, e.message);
+			return null;
+		}
 	}
 
 	/**
 	 * OpenStreetMapのNominatim(無料・APIキー不要)で逆ジオコーディングする。
 	 * 写真のGPS座標は店の入口ちょうどとは限らないため、店名が正確に取れるとは限らない。
-	 * display_nameの先頭要素を店名/施設名の推定値として扱い、フルの住所も合わせて表示する。
+	 * display_nameの先頭要素を店名/施設名の推定値として扱う。
+	 * 都道府県・市区町村はNominatim、町丁目名はより精度の高いGSIの結果を優先して組み合わせる。
 	 */
 	async function lookupShopName(lat, lng) {
 		const key = cacheKey(lat, lng);
 		if (shopNameCache.has(key)) {
 			return shopNameCache.get(key);
 		}
-		const url =
+		const nominatimUrl =
 			'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' +
 			encodeURIComponent(lat) +
 			'&lon=' +
 			encodeURIComponent(lng) +
 			'&zoom=18&addressdetails=1&accept-language=ja';
 		try {
-			const res = await fetch(url, { headers: { Accept: 'application/json' } });
+			const [res, gsiTownName] = await Promise.all([
+				fetch(nominatimUrl, { headers: { Accept: 'application/json' } }),
+				lookupGsiTownName(lat, lng),
+			]);
 			if (!res.ok) throw new Error('status=' + res.status);
 			const data = await res.json();
 			const displayName = data.display_name || '';
 			const guessedName = displayName.split(',')[0].trim();
-			const formattedAddress = formatJapaneseAddress(data.address) || displayName;
+
+			const broad = joinAddressFields(data.address, BROAD_ADDRESS_FIELD_ORDER);
+			const fine = gsiTownName || joinAddressFields(data.address, FINE_ADDRESS_FIELD_ORDER);
+			const postcodePrefix = data.address && data.address.postcode ? '〒' + data.address.postcode + ' ' : '';
+			const formattedAddress = (postcodePrefix + broad + fine).trim() || displayName;
+
 			const result = { name: guessedName || null, address: formattedAddress };
 			shopNameCache.set(key, result);
 			return result;
