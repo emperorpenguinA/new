@@ -1,0 +1,58 @@
+body {
+	font-family: sans-serif;
+	max-width: 800px;
+	margin: 2rem auto;
+	padding: 0 1rem;
+}
+
+button,
+.file-picker-label {
+	display: inline-block;
+	font-size: 1rem;
+	padding: 0.5rem 1rem;
+	margin-right: 0.5rem;
+	cursor: pointer;
+}
+
+.file-picker-label {
+	background: #2c3e50;
+	color: #fff;
+	border-radius: 4px;
+}
+
+#selectedFolderName {
+	color: #555;
+}
+
+.notice {
+	color: #c0392b;
+}
+
+.shop-name-loading {
+	color: #888;
+}
+
+.ramen-emoji-icon {
+	background: transparent;
+	border: none;
+}
+
+.ramen-emoji-icon-inner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	font-size: 22px;
+	line-height: 1;
+	background: #fff3e0;
+	border: 2px solid #e65100;
+	border-radius: 50%;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+#map {
+	height: 600px;
+	width: 100%;
+	margin-top: 1rem;
+}

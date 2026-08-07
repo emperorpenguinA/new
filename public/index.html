@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🍜 ラーメンマップ</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>🍜 ラーメンマップ</h1>
+<p>
+	Google TakeoutでエクスポートしたGoogleフォトのフォルダを選択すると、
+	写真の位置情報(EXIFまたはTakeoutの付属JSON)から地図上にプロットします。
+	フォルダの中身は全てブラウザ内で処理され、外部には送信されません。
+</p>
+
+<section id="step-scan">
+	<label class="file-picker-label" for="folderInput">📁 フォルダを選択</label>
+	<input type="file" id="folderInput" webkitdirectory directory multiple hidden>
+	<span id="selectedFolderName"></span>
+	<p id="scanMessage" class="notice" hidden></p>
+</section>
+
+<section id="step-map" hidden>
+	<p id="mapSummary"></p>
+	<button id="rescanButton">別のフォルダを選択する</button>
+	<div id="map"></div>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/exifr/dist/full.umd.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
