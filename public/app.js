@@ -167,13 +167,17 @@
 		'village', // 村
 	];
 
-	// 町丁目以下のレベル。GSIから町丁目名が取れなかった場合のフォールバックに使う。
-	const FINE_ADDRESS_FIELD_ORDER = [
+	// 町丁目レベル。GSIから町丁目名が取れなかった場合のフォールバックに使う。
+	const AREA_ADDRESS_FIELD_ORDER = [
 		'suburb', // 地区/町丁目
 		'subdivision',
 		'city_block', // 丁目
 		'neighbourhood',
 		'quarter',
+	];
+
+	// 道路名・番地レベル。GSIはこの情報を含まないため、GSIが使えた場合でも常にNominatim側から補う。
+	const ROAD_ADDRESS_FIELD_ORDER = [
 		'road',
 		'house_number', // 番地(Nominatim/OSMの日本の住所データには含まれないことが多い)
 	];
@@ -239,9 +243,11 @@
 			const guessedName = displayName.split(',')[0].trim();
 
 			const broad = joinAddressFields(data.address, BROAD_ADDRESS_FIELD_ORDER);
-			const fine = gsiTownName || joinAddressFields(data.address, FINE_ADDRESS_FIELD_ORDER);
+			const area = gsiTownName || joinAddressFields(data.address, AREA_ADDRESS_FIELD_ORDER);
+			// GSIは道路名・番地を含まないため、GSIの町丁目名が使えた場合でもNominatim側から常に補う
+			const road = joinAddressFields(data.address, ROAD_ADDRESS_FIELD_ORDER);
 			const postcodePrefix = data.address && data.address.postcode ? '〒' + data.address.postcode + ' ' : '';
-			const formattedAddress = (postcodePrefix + broad + fine).trim() || displayName;
+			const formattedAddress = (postcodePrefix + broad + area + road).trim() || displayName;
 
 			const result = { name: guessedName || null, address: formattedAddress };
 			shopNameCache.set(key, result);
